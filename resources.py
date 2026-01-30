@@ -107,6 +107,13 @@ THEMES = {
         "error": "#e67e80",
         "caret": "#7fbbb3"
     },
+    "high_contrast": {
+        "bg": "#000000",
+        "main": "#888888",
+        "correct": "#ffffff",
+        "error": "#ff0000",
+        "caret": "#00ff00"
+    },
 }
 
 # Current Theme (Default)
@@ -122,9 +129,10 @@ COLOR_TEXT_CORRECT = THEMES["monkeytype"]["correct"]
 COLOR_TEXT_ERROR = THEMES["monkeytype"]["error"]
 COLOR_CARET = THEMES["monkeytype"]["caret"]
 
-# Fonts
+# Fonts (FONT_SIZE can be overridden from config: small=18, medium=24, large=30)
 FONT_FAMILY = "Consolas, 'Courier New', monospace"
 FONT_SIZE = 24
+FONT_SIZE_OPTIONS = {"small": 18, "medium": 24, "large": 30}
 
 # Word List (Top ~200 common English words)
 WORD_LIST = [

@@ -75,5 +75,47 @@
         "wpm": 70,
         "accuracy": 100,
         "missed": 6
+    },
+    {
+        "timestamp": "2026-01-30 18:43:06",
+        "mode": "time",
+        "wpm": 45,
+        "accuracy": 94,
+        "missed": 26
+    },
+    {
+        "timestamp": "2026-01-30 18:47:15",
+        "mode": "time",
+        "wpm": 44,
+        "accuracy": 100,
+        "missed": 4
+    },
+    {
+        "timestamp": "2026-01-30 18:54:15",
+        "mode": "time",
+        "wpm": 31,
+        "accuracy": 33,
+        "missed": 4
+    },
+    {
+        "timestamp": "2026-01-30 18:54:31",
+        "mode": "time",
+        "wpm": 68,
+        "accuracy": 98,
+        "missed": 5
+    },
+    {
+        "timestamp": "2026-01-30 18:54:49",
+        "mode": "time",
+        "wpm": 52,
+        "accuracy": 100,
+        "missed": 9
+    },
+    {
+        "timestamp": "2026-01-30 18:55:22",
+        "mode": "time",
+        "wpm": 21,
+        "accuracy": 50,
+        "missed": 1
     }
 ]

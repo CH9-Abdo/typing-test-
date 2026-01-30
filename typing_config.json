@@ -1,0 +1,10 @@
+{
+  "theme": "monkeytype",
+  "layout": "dvorak",
+  "mode": "time",
+  "duration": 15,
+  "word_count": 10,
+  "font_size": "small",
+  "sound_on_error": true,
+  "reduced_motion": true
+}

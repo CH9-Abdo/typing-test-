@@ -3,13 +3,19 @@ import random
 import time
 import json
 import os
+import sys
 from resources import WORD_LIST, QUOTE_LIST
 
+def _app_dir():
+    return os.path.dirname(os.path.abspath(__file__))
+
 class HistoryManager:
-    FILE_PATH = "typing_history.json"
+    FILE_PATH = os.path.join(_app_dir(), "typing_history.json")
+    _last_save_error = None  # Optional: UI can check and show message
 
     @staticmethod
     def save_attempt(data):
+        HistoryManager._last_save_error = None
         history = HistoryManager.load_history()
         history.append({
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -18,19 +24,19 @@ class HistoryManager:
             "accuracy": data.get("accuracy"),
             "missed": data.get("missed_count")
         })
-        # Keep only last 50
         history = history[-50:]
         try:
-            with open(HistoryManager.FILE_PATH, "w") as f:
+            with open(HistoryManager.FILE_PATH, "w", encoding="utf-8") as f:
                 json.dump(history, f, indent=4)
-        except Exception as e:
-            print(f"Error saving history: {e}")
+        except OSError as e:
+            HistoryManager._last_save_error = str(e)
+            print(f"Error saving history: {e}", file=sys.stderr)
 
     @staticmethod
     def load_history():
         if os.path.exists(HistoryManager.FILE_PATH):
             try:
-                with open(HistoryManager.FILE_PATH, "r") as f:
+                with open(HistoryManager.FILE_PATH, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError):
                 return []
@@ -49,9 +55,10 @@ class HistoryManager:
 
 class TypingEngine:
     def __init__(self, mode="time", duration=30, word_count=25):
-        self.mode = mode # "time", "word", "quote"
+        self.mode = mode  # "time", "word", "quote"
         self.test_duration = duration
         self.target_word_count = word_count
+        self.layout = "qwerty"  # "qwerty" or "dvorak" (for keyboard visualizer)
         self.words = []
         self.target_text = ""
         self.user_input = ""
