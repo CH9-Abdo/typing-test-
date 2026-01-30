@@ -1,0 +1,5 @@
+# PyQt5 version (default)
+PyQt5>=5.15
+
+# Pygame version (optional)
+pygame>=2.5

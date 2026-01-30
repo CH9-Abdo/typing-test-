@@ -1,0 +1,79 @@
+[
+    {
+        "timestamp": "2026-01-30 18:06:36",
+        "mode": "time",
+        "wpm": 35,
+        "accuracy": 100,
+        "missed": 2
+    },
+    {
+        "timestamp": "2026-01-30 18:08:19",
+        "mode": "time",
+        "wpm": 41,
+        "accuracy": 100,
+        "missed": 2
+    },
+    {
+        "timestamp": "2026-01-30 18:08:52",
+        "mode": "time",
+        "wpm": 65,
+        "accuracy": 99,
+        "missed": 9
+    },
+    {
+        "timestamp": "2026-01-30 18:09:37",
+        "mode": "time",
+        "wpm": 59,
+        "accuracy": 98,
+        "missed": 13
+    },
+    {
+        "timestamp": "2026-01-30 18:23:45",
+        "mode": "word",
+        "wpm": 44,
+        "accuracy": 88,
+        "missed": 2
+    },
+    {
+        "timestamp": "2026-01-30 18:25:06",
+        "mode": "time",
+        "wpm": 50,
+        "accuracy": 100,
+        "missed": 2
+    },
+    {
+        "timestamp": "2026-01-30 18:25:40",
+        "mode": "time",
+        "wpm": 62,
+        "accuracy": 100,
+        "missed": 17
+    },
+    {
+        "timestamp": "2026-01-30 18:26:11",
+        "mode": "word",
+        "wpm": 67,
+        "accuracy": 100,
+        "missed": 7
+    },
+    {
+        "timestamp": "2026-01-30 18:29:05",
+        "mode": "word",
+        "wpm": 40,
+        "accuracy": 86,
+        "missed": 3
+    },
+    {
+        "timestamp": "2026-01-30 18:29:31",
+        "mode": "word",
+        "wpm": 72,
+        "accuracy": 100,
+        "missed": 5
+    },
+    {
+        "timestamp": "2026-01-30 18:33:42",
+        "mode": "time",
+        "wpm": 70,
+        "accuracy": 100,
+        "missed": 6
+    }
+]
