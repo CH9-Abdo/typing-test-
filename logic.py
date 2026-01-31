@@ -224,8 +224,8 @@ class TypingEngine:
 
         self.calculate_stats()
 
-        # In word/quote mode, test is complete when user has typed the full text
-        if self.mode in ("word", "quote") and len(self.user_input) >= len(self.target_text):
+        # In word/quote/practice mode, test is complete when user has typed the full text
+        if self.mode in ("word", "quote", "practice") and len(self.user_input) >= len(self.target_text):
             return True
         return False
 

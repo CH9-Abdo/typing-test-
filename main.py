@@ -515,8 +515,9 @@ def main():
         surface.blit(hint, (rect.centerx - hint.get_width() // 2, rect.bottom - 40))
 
     def draw_history_overlay(surface, theme):
+        # Semi-transparent bg
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
+        overlay.fill((0, 0, 0, 210))
         surface.blit(overlay, (0, 0))
 
         sw, sh = surface.get_size()
@@ -529,6 +530,7 @@ def main():
 
         draw_text_centered(surface, "Typing History", font_ui_bold, theme["caret"], (rect.centerx, oy + 30))
         
+        # --- Table (Top Half) ---
         headers = ["Date", "Mode", "WPM", "Accuracy", "Missed"]
         col_x = [ox + 40, ox + 220, ox + 350, ox + 450, ox + 580]
         header_y = oy + 60
@@ -536,6 +538,7 @@ def main():
         for i, h in enumerate(headers):
             txt = font_ui_bold.render(h, True, theme["main"])
             surface.blit(txt, (col_x[i], header_y))
+        
         pygame.draw.line(surface, theme["main"], (ox + 20, header_y + 25), (ox + ow - 20, header_y + 25), 1)
 
         history = HistoryManager.load_history()
@@ -558,9 +561,14 @@ def main():
                 surface.blit(txt, (col_x[i], row_y))
             row_y += 28
 
-        graph_top = row_y + 30
-        graph_h = rect.bottom - graph_top - 80 
-        graph_rect = pygame.Rect(ox + 60, graph_top, ow - 120, graph_h)
+        # --- Graph (Bottom Half) ---
+        graph_top = row_y + 40
+        graph_h = rect.bottom - graph_top - 90 
+        graph_w = ow - 120
+        graph_rect = pygame.Rect(ox + 80, graph_top, graph_w, graph_h)
+        
+        # Graph Background/Grid
+        # pygame.draw.rect(surface, (30, 30, 30), graph_rect) # Optional dark bg for graph area
         
         graph_data = history[-50:]
         if len(graph_data) > 1:
@@ -571,19 +579,20 @@ def main():
                 max_wpm += 10
                 min_wpm = max(0, min_wpm - 10)
             
-            avg_points = []
-            window_size = 10
-            if len(wpm_values) >= window_size:
-                for i in range(len(wpm_values) - window_size + 1):
-                    window = wpm_values[i : i + window_size]
-                    avg = sum(window) / window_size
-                    avg_points.append((i + window_size - 1, avg))
+            # Grid Lines
+            grid_steps = 4
+            for i in range(grid_steps + 1):
+                val = min_wpm + (max_wpm - min_wpm) * (i / grid_steps)
+                y_pos = graph_rect.bottom - (i / grid_steps) * graph_rect.height
+                
+                # Grid line
+                pygame.draw.line(surface, theme["main"], (graph_rect.left, y_pos), (graph_rect.right, y_pos), 1)
+                
+                # Axis Label
+                lbl = font_ui_small.render(f"{int(val)}", True, theme["main"])
+                surface.blit(lbl, (graph_rect.left - lbl.get_width() - 10, y_pos - lbl.get_height() // 2))
 
-            max_lbl = font_ui_small.render(str(max_wpm), True, theme["main"])
-            min_lbl = font_ui_small.render(str(min_wpm), True, theme["main"])
-            surface.blit(max_lbl, (graph_rect.left - max_lbl.get_width() - 8, graph_rect.top))
-            surface.blit(min_lbl, (graph_rect.left - min_lbl.get_width() - 8, graph_rect.bottom - min_lbl.get_height()))
-
+            # Calculate Points
             points = []
             count = len(wpm_values)
             for i, wpm in enumerate(wpm_values):
@@ -591,29 +600,61 @@ def main():
                 norm = (wpm - min_wpm) / (max_wpm - min_wpm)
                 py = graph_rect.bottom - norm * graph_rect.height
                 points.append((px, py))
-            
+
+            # Draw Fill Under Curve (Raw WPM)
             if len(points) >= 2:
-                pygame.draw.lines(surface, theme["caret"], False, points, 2)
+                poly_points = points.copy()
+                poly_points.append((points[-1][0], graph_rect.bottom))
+                poly_points.append((points[0][0], graph_rect.bottom))
+                
+                fill_surf = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+                r, g, b = theme["caret"]
+                pygame.draw.polygon(fill_surf, (r, g, b, 40), poly_points)
+                surface.blit(fill_surf, (0, 0))
+
+                # Antialiased Line
+                pygame.draw.aalines(surface, theme["caret"], False, points)
+                # Markers
                 for p in points:
-                    pygame.draw.circle(surface, theme["caret"], (int(p[0]), int(p[1])), 3)
+                    pygame.draw.circle(surface, theme["caret"], (int(p[0]), int(p[1])), 2)
 
-            if len(avg_points) >= 2:
-                ma_screen_points = []
-                for idx, val in avg_points:
-                    px = graph_rect.left + (idx / (count - 1)) * graph_rect.width
-                    norm = (val - min_wpm) / (max_wpm - min_wpm)
-                    norm = max(0, min(1, norm))
-                    py = graph_rect.bottom - norm * graph_rect.height
-                    ma_screen_points.append((px, py))
-                pygame.draw.lines(surface, theme["main"], False, ma_screen_points, 3)
+            # Moving Average
+            window_size = 10
+            if len(wpm_values) >= window_size:
+                avg_points = []
+                for i in range(len(wpm_values) - window_size + 1):
+                    window = wpm_values[i : i + window_size]
+                    avg = sum(window) / window_size
+                    avg_points.append((i + window_size - 1, avg))
+                
+                if len(avg_points) >= 2:
+                    ma_screen_points = []
+                    for idx, val in avg_points:
+                        px = graph_rect.left + (idx / (count - 1)) * graph_rect.width
+                        norm = (val - min_wpm) / (max_wpm - min_wpm)
+                        norm = max(0, min(1, norm))
+                        py = graph_rect.bottom - norm * graph_rect.height
+                        ma_screen_points.append((px, py))
+                    
+                    # Draw thick smooth line for average
+                    # Since aalines doesn't support thickness > 1 well, we draw multiple offsets or just normal lines
+                    # For "Curve", standard lines with thickness 2 or 3 is best.
+                    pygame.draw.lines(surface, theme["main"], False, ma_screen_points, 3)
 
-            legend_y = graph_rect.bottom + 10
-            pygame.draw.circle(surface, theme["caret"], (rect.centerx - 60, legend_y + 6), 4)
+            # Legend
+            legend_y = graph_rect.bottom + 25
+            
+            # Legend Item 1
+            lx1 = rect.centerx - 80
+            pygame.draw.circle(surface, theme["caret"], (lx1, legend_y + 6), 4)
             l1 = font_ui_small.render("Raw WPM", True, theme["main"])
-            surface.blit(l1, (rect.centerx - 50, legend_y))
-            pygame.draw.circle(surface, theme["main"], (rect.centerx + 20, legend_y + 6), 4)
+            surface.blit(l1, (lx1 + 10, legend_y))
+            
+            # Legend Item 2
+            lx2 = rect.centerx + 40
+            pygame.draw.circle(surface, theme["main"], (lx2, legend_y + 6), 4)
             l2 = font_ui_small.render(f"Avg ({window_size})", True, theme["main"])
-            surface.blit(l2, (rect.centerx + 30, legend_y))
+            surface.blit(l2, (lx2 + 10, legend_y))
         
         elif len(graph_data) == 1:
              msg = font_ui.render("Not enough data for graph", True, theme["main"])
