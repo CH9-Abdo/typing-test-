@@ -194,5 +194,47 @@
         "wpm": 61,
         "accuracy": 100,
         "missed": 2
+    },
+    {
+        "timestamp": "2026-01-31 12:21:12",
+        "mode": "word",
+        "wpm": 0,
+        "accuracy": 100,
+        "missed": 1
+    },
+    {
+        "timestamp": "2026-01-31 12:21:13",
+        "mode": "word",
+        "wpm": 0,
+        "accuracy": 0,
+        "missed": 1
+    },
+    {
+        "timestamp": "2026-01-31 12:21:16",
+        "mode": "word",
+        "wpm": 51,
+        "accuracy": 80,
+        "missed": 4
+    },
+    {
+        "timestamp": "2026-01-31 12:21:23",
+        "mode": "word",
+        "wpm": 55,
+        "accuracy": 92,
+        "missed": 3
+    },
+    {
+        "timestamp": "2026-01-31 12:21:33",
+        "mode": "word",
+        "wpm": 46,
+        "accuracy": 94,
+        "missed": 5
+    },
+    {
+        "timestamp": "2026-01-31 12:21:43",
+        "mode": "word",
+        "wpm": 70,
+        "accuracy": 100,
+        "missed": 2
     }
 ]

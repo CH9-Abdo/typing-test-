@@ -22,7 +22,7 @@ KEY_SPACE_W = 340
 KEY_SPACE_H = 42
 KEY_GAP = 6
 KEYBOARD_ROWS_QWERTY = ["qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./"]
-KEYBOARD_ROWS_DVORAK = ["',.pyfgcrl/=", "aoeuidhtns-", ";qjkxbmnwvz"]
+KEYBOARD_ROWS_DVORAK = ["',.pyfgcrl/=", "aoeuidhtns-", ";qjkxbmwvz"]
 HIGHLIGHT_MS = 150
 THEME_DROPDOWN_MAX_H = 300
 THEME_ITEM_H = 32
@@ -658,6 +658,7 @@ def main():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                save_cfg()
                 running = False
             
             elif event.type == pygame.KEYDOWN:
