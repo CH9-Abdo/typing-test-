@@ -557,7 +557,7 @@ def main():
         surface.blit(overlay, (0, 0))
 
         sw, sh = surface.get_size()
-        ow, oh = 800, 600
+        ow, oh = 800, 650
         ox, oy = (sw - ow) // 2, (sh - oh) // 2
         rect = pygame.Rect(ox, oy, ow, oh)
         
@@ -566,10 +566,10 @@ def main():
 
         draw_text_centered(surface, "Typing History", font_ui_bold, theme["caret"], (rect.centerx, oy + 30))
         
-        # Table Header
+        # --- Table (Top Half) ---
         headers = ["Date", "Mode", "WPM", "Accuracy", "Missed"]
         col_x = [ox + 40, ox + 220, ox + 350, ox + 450, ox + 580]
-        header_y = oy + 70
+        header_y = oy + 60
         
         for i, h in enumerate(headers):
             txt = font_ui_bold.render(h, True, theme["main"])
@@ -577,15 +577,14 @@ def main():
         
         pygame.draw.line(surface, theme["main"], (ox + 20, header_y + 25), (ox + ow - 20, header_y + 25), 1)
 
-        # List
         history = HistoryManager.load_history()
-        # Show last 15, newest first
-        recent = list(reversed(history))[:15]
+        # Show last 10 for table to save space for graph
+        recent_count = 10
+        recent = list(reversed(history))[:recent_count]
         
         row_y = header_y + 35
         for entry in recent:
-            # Shorten date
-            date_str = entry.get("timestamp", "")[5:-3] # MM-DD HH:MM
+            date_str = entry.get("timestamp", "")[5:-3]
             mode_str = entry.get("mode", "?").title()
             wpm_val = str(entry.get("wpm", 0))
             acc_val = f"{entry.get('accuracy', 0)}%"
@@ -594,11 +593,60 @@ def main():
             vals = [date_str, mode_str, wpm_val, acc_val, miss_val]
             for i, val in enumerate(vals):
                 c = theme["main"]
-                if i == 2: c = theme["caret"] # WPM highlight
+                if i == 2: c = theme["caret"]
                 txt = font_ui.render(val, True, c)
                 surface.blit(txt, (col_x[i], row_y))
-            
             row_y += 28
+
+        # --- Graph (Bottom Half) ---
+        # Graph area
+        graph_rect = pygame.Rect(ox + 60, row_y + 20, ow - 120, oh - (row_y - oy) - 60)
+        # pygame.draw.rect(surface, theme["main"], graph_rect, 1) # Debug border
+        
+        # Data for graph (last 50)
+        graph_data = history[-50:]
+        if len(graph_data) > 1:
+            wpm_values = [d.get("wpm", 0) for d in graph_data]
+            max_wpm = max(wpm_values)
+            min_wpm = min(wpm_values)
+            if max_wpm == min_wpm:
+                max_wpm += 10
+                min_wpm = max(0, min_wpm - 10)
+            
+            # Draw axes labels
+            max_lbl = font_ui_small.render(str(max_wpm), True, theme["main"])
+            min_lbl = font_ui_small.render(str(min_wpm), True, theme["main"])
+            surface.blit(max_lbl, (graph_rect.left - max_lbl.get_width() - 8, graph_rect.top))
+            surface.blit(min_lbl, (graph_rect.left - min_lbl.get_width() - 8, graph_rect.bottom - min_lbl.get_height()))
+
+            # Draw lines
+            points = []
+            count = len(wpm_values)
+            for i, wpm in enumerate(wpm_values):
+                # x: spread evenly
+                px = graph_rect.left + (i / (count - 1)) * graph_rect.width
+                # y: scale based on min/max
+                # (val - min) / (max - min) --> 0..1
+                # y = bottom - normalized * height
+                norm = (wpm - min_wpm) / (max_wpm - min_wpm)
+                py = graph_rect.bottom - norm * graph_rect.height
+                points.append((px, py))
+            
+            if len(points) >= 2:
+                pygame.draw.lines(surface, theme["caret"], False, points, 2)
+                for p in points:
+                    pygame.draw.circle(surface, theme["caret"], (int(p[0]), int(p[1])), 3)
+            
+            # Title for graph
+            g_title = font_ui_small.render("WPM Progress (Last 50)", True, theme["main"])
+            surface.blit(g_title, (graph_rect.centerx - g_title.get_width() // 2, graph_rect.bottom + 10))
+        
+        elif len(graph_data) == 1:
+             msg = font_ui.render("Not enough data for graph", True, theme["main"])
+             surface.blit(msg, (graph_rect.centerx - msg.get_width()//2, graph_rect.centery))
+        else:
+             msg = font_ui.render("No history data", True, theme["main"])
+             surface.blit(msg, (graph_rect.centerx - msg.get_width()//2, graph_rect.centery))
 
         # Close hint
         close = font_ui.render("Press ESC or Click History button to Close", True, theme["main"])
