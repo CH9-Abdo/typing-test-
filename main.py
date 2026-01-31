@@ -557,7 +557,7 @@ def main():
         surface.blit(overlay, (0, 0))
 
         sw, sh = surface.get_size()
-        ow, oh = 800, 650
+        ow, oh = 800, 700  # Increased height for better spacing
         ox, oy = (sw - ow) // 2, (sh - oh) // 2
         rect = pygame.Rect(ox, oy, ow, oh)
         
@@ -578,8 +578,8 @@ def main():
         pygame.draw.line(surface, theme["main"], (ox + 20, header_y + 25), (ox + ow - 20, header_y + 25), 1)
 
         history = HistoryManager.load_history()
-        # Show last 10 for table to save space for graph
-        recent_count = 10
+        # Show last 8 for table to save even more space for graph
+        recent_count = 8
         recent = list(reversed(history))[:recent_count]
         
         row_y = header_y + 35
@@ -600,8 +600,9 @@ def main():
 
         # --- Graph (Bottom Half) ---
         # Graph area
-        graph_rect = pygame.Rect(ox + 60, row_y + 20, ow - 120, oh - (row_y - oy) - 60)
-        # pygame.draw.rect(surface, theme["main"], graph_rect, 1) # Debug border
+        graph_top = row_y + 30
+        graph_h = rect.bottom - graph_top - 80 # Leave 80px for footer
+        graph_rect = pygame.Rect(ox + 60, graph_top, ow - 120, graph_h)
         
         # Data for graph (last 50)
         graph_data = history[-50:]
@@ -613,21 +614,28 @@ def main():
                 max_wpm += 10
                 min_wpm = max(0, min_wpm - 10)
             
+            # Calculate Moving Average (Window 10)
+            avg_points = []
+            window_size = 10
+            if len(wpm_values) >= window_size:
+                for i in range(len(wpm_values) - window_size + 1):
+                    window = wpm_values[i : i + window_size]
+                    avg = sum(window) / window_size
+                    # x position should correspond to the END of the window (the 10th point)
+                    # index in wpm_values for the end is i + window_size - 1
+                    avg_points.append((i + window_size - 1, avg))
+
             # Draw axes labels
             max_lbl = font_ui_small.render(str(max_wpm), True, theme["main"])
             min_lbl = font_ui_small.render(str(min_wpm), True, theme["main"])
             surface.blit(max_lbl, (graph_rect.left - max_lbl.get_width() - 8, graph_rect.top))
             surface.blit(min_lbl, (graph_rect.left - min_lbl.get_width() - 8, graph_rect.bottom - min_lbl.get_height()))
 
-            # Draw lines
+            # Draw raw data lines
             points = []
             count = len(wpm_values)
             for i, wpm in enumerate(wpm_values):
-                # x: spread evenly
-                px = graph_rect.left + (i / (count - 1)) * graph_rect.width
-                # y: scale based on min/max
-                # (val - min) / (max - min) --> 0..1
-                # y = bottom - normalized * height
+                px = graph_rect.left + (i / (count - 1)) * graph_rect.width if count > 1 else graph_rect.centerx
                 norm = (wpm - min_wpm) / (max_wpm - min_wpm)
                 py = graph_rect.bottom - norm * graph_rect.height
                 points.append((px, py))
@@ -636,10 +644,34 @@ def main():
                 pygame.draw.lines(surface, theme["caret"], False, points, 2)
                 for p in points:
                     pygame.draw.circle(surface, theme["caret"], (int(p[0]), int(p[1])), 3)
-            
-            # Title for graph
-            g_title = font_ui_small.render("WPM Progress (Last 50)", True, theme["main"])
-            surface.blit(g_title, (graph_rect.centerx - g_title.get_width() // 2, graph_rect.bottom + 10))
+
+            # Draw Moving Average line
+            if len(avg_points) >= 2:
+                ma_screen_points = []
+                for idx, val in avg_points:
+                    px = graph_rect.left + (idx / (count - 1)) * graph_rect.width
+                    norm = (val - min_wpm) / (max_wpm - min_wpm)
+                    # Clamp norm 0..1 just in case
+                    norm = max(0, min(1, norm))
+                    py = graph_rect.bottom - norm * graph_rect.height
+                    ma_screen_points.append((px, py))
+                
+                # Draw thicker, different color (using main or error/red for contrast if available, 
+                # but theme["main"] is safer for harmony, maybe slightly dimmer or error color for contrast?)
+                # Let's use theme["error"] or a mix. Let's use theme["main"] for subtle, or specific color.
+                # User asked for "a curve", let's make it distinct.
+                pygame.draw.lines(surface, theme["main"], False, ma_screen_points, 3)
+
+            # Legend
+            legend_y = graph_rect.bottom + 10
+            # Raw
+            pygame.draw.circle(surface, theme["caret"], (rect.centerx - 60, legend_y + 6), 4)
+            l1 = font_ui_small.render("Raw WPM", True, theme["main"])
+            surface.blit(l1, (rect.centerx - 50, legend_y))
+            # Avg
+            pygame.draw.circle(surface, theme["main"], (rect.centerx + 20, legend_y + 6), 4)
+            l2 = font_ui_small.render(f"Avg ({window_size})", True, theme["main"])
+            surface.blit(l2, (rect.centerx + 30, legend_y))
         
         elif len(graph_data) == 1:
              msg = font_ui.render("Not enough data for graph", True, theme["main"])
@@ -648,9 +680,13 @@ def main():
              msg = font_ui.render("No history data", True, theme["main"])
              surface.blit(msg, (graph_rect.centerx - msg.get_width()//2, graph_rect.centery))
 
-        # Close hint
-        close = font_ui.render("Press ESC or Click History button to Close", True, theme["main"])
-        surface.blit(close, (rect.centerx - close.get_width() // 2, rect.bottom - 40))
+        # Close Button
+        close_btn_rect = pygame.Rect(0, 0, 100, 34)
+        close_btn_rect.center = (rect.centerx, rect.bottom - 30)
+        draw_button_bg(surface, close_btn_rect, theme["bg"], theme["main"], radius=6)
+        draw_text_centered(surface, "Close", font_ui_bold, theme["main"], close_btn_rect.center)
+        
+        return close_btn_rect
 
 
     def open_theme_dropdown(theme_btn_rect):
@@ -696,6 +732,8 @@ def main():
     last_tick = pygame.time.get_ticks()
     settings_rects_cache = None
     theme_dropdown_rects = None
+
+    history_close_btn_rect = None
 
     running = True
     while running:
@@ -761,16 +799,12 @@ def main():
                 # If history open, clicking anywhere (or specific button) could close it? 
                 # Let's enforce clicking the History button to toggle back or Esc.
                 if show_history:
-                     # Check if clicked outside history box? For now, just check History button below or simple toggle
-                     # We need rects to check the history button again.
-                     sx, sy, sw, sh = layouts["settings"]
-                     settings_rects_cache = get_settings_bar_rects(sx, sy, sw, sh)
-                     if settings_rects_cache["history"].collidepoint(pos):
+                     # Check if clicked close button
+                     if history_close_btn_rect and history_close_btn_rect.collidepoint(pos):
                          show_history = False
-                     else:
-                         # Click outside could close?
-                         # Let's stick to toggle button
-                         pass
+                     
+                     # Also allow clicking the main History button to toggle off (if visible/clickable)
+                     # But overlay covers it usually. The internal close button is best.
                      continue
 
                 # Theme dropdown
@@ -920,7 +954,7 @@ def main():
             draw_overlay(screen, theme, overlay_wpm, overlay_acc, overlay_missed)
         
         if show_history:
-            draw_history_overlay(screen, theme)
+            history_close_btn_rect = draw_history_overlay(screen, theme)
 
         pygame.display.flip()
         clock.tick(60)

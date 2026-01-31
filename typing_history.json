@@ -250,5 +250,19 @@
         "wpm": 67,
         "accuracy": 100,
         "missed": 1
+    },
+    {
+        "timestamp": "2026-01-31 12:34:00",
+        "mode": "word",
+        "wpm": 62,
+        "accuracy": 100,
+        "missed": 5
+    },
+    {
+        "timestamp": "2026-01-31 12:34:10",
+        "mode": "word",
+        "wpm": 71,
+        "accuracy": 100,
+        "missed": 2
     }
 ]
