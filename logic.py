@@ -9,6 +9,86 @@ from resources import WORD_LIST, QUOTE_LIST
 def _app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
+class StatsManager:
+    FILE_PATH = os.path.join(_app_dir(), "typing_stats.json")
+
+    @staticmethod
+    def load_stats():
+        if os.path.exists(StatsManager.FILE_PATH):
+            try:
+                with open(StatsManager.FILE_PATH, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                return {}
+        return {}
+
+    @staticmethod
+    def save_stats(stats):
+        try:
+            with open(StatsManager.FILE_PATH, "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=4)
+        except OSError as e:
+            print(f"Error saving stats: {e}", file=sys.stderr)
+
+    @staticmethod
+    def update_missed_chars(missed_list):
+        """missed_list is list of (expected, typed) tuples"""
+        stats = StatsManager.load_stats()
+        missed_counts = stats.get("missed_chars", {})
+        
+        for expected, typed in missed_list:
+            # We track the character that was EXPECTED but missed
+            # We can also track based on what was typed wrong if we want, but usually you practice what you missed.
+            char = expected
+            if char not in missed_counts:
+                missed_counts[char] = 0
+            missed_counts[char] += 1
+            
+        stats["missed_chars"] = missed_counts
+        StatsManager.save_stats(stats)
+
+    @staticmethod
+    def get_weighted_words(count=25):
+        stats = StatsManager.load_stats()
+        missed_counts = stats.get("missed_chars", {})
+        
+        if not missed_counts:
+            # No data, return random
+            return random.sample(WORD_LIST, min(len(WORD_LIST), count))
+        
+        # Score words based on missed chars
+        # Score = sum of counts of chars in word
+        word_scores = []
+        for word in WORD_LIST:
+            score = 0
+            for char in word:
+                score += missed_counts.get(char, 0)
+            # Add a small base score so even non-missed words have a tiny chance/weight if needed, 
+            # or just to differentiate 0 score.
+            # But here we want to prioritize missed.
+            if score > 0:
+                word_scores.append((word, score))
+        
+        word_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # If we have enough scored words, pick from top 50% or top N
+        # Let's simple strategy: Pick top 30% of words with problems, then sample?
+        # Or just take top 'count' words? That might be repetitive.
+        # Let's take top 50 problematic words and sample 'count' from them.
+        
+        top_candidates = [w for w, s in word_scores[:50]]
+        
+        if len(top_candidates) < count:
+            # Fill rest with random
+            needed = count - len(top_candidates)
+            others = [w for w in WORD_LIST if w not in top_candidates]
+            result = top_candidates + random.sample(others, min(len(others), needed))
+            random.shuffle(result)
+            return result
+        
+        return random.sample(top_candidates, count)
+
+
 class HistoryManager:
     FILE_PATH = os.path.join(_app_dir(), "typing_history.json")
     _last_save_error = None  # Optional: UI can check and show message
@@ -53,9 +133,10 @@ class HistoryManager:
         history = HistoryManager.load_history()
         return history[-2] if len(history) >= 2 else None
 
+
 class TypingEngine:
     def __init__(self, mode="time", duration=30, word_count=25):
-        self.mode = mode  # "time", "word", "quote"
+        self.mode = mode  # "time", "word", "quote", "practice"
         self.test_duration = duration
         self.target_word_count = word_count
         self.layout = "qwerty"  # "qwerty" or "dvorak" (for keyboard visualizer)
@@ -82,6 +163,9 @@ class TypingEngine:
             self.target_text = " ".join(self.words)
         elif self.mode == "quote":
             self.target_text = random.choice(QUOTE_LIST)
+        elif self.mode == "practice":
+            self.words = StatsManager.get_weighted_words(self.target_word_count)
+            self.target_text = " ".join(self.words)
             
         self.user_input = ""
         self.start_time = 0
@@ -110,6 +194,10 @@ class TypingEngine:
             "accuracy": self.accuracy,
             "missed_count": len(self.missed_data)
         })
+        
+        # Save detailed stats
+        if self.missed_data:
+             StatsManager.update_missed_chars(self.missed_data)
 
     def process_key(self, key_text):
         if self.is_finished:

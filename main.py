@@ -12,6 +12,9 @@ def hex_to_rgb(hex_str):
     h = hex_str.lstrip("#")
     return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
 
+def lerp(start, end, amount):
+    return start + (end - start) * amount
+
 # --- Constants ---
 WINDOW_W = 1100
 WINDOW_H = 820
@@ -21,12 +24,13 @@ KEY_SIZE = 46
 KEY_SPACE_W = 340
 KEY_SPACE_H = 42
 KEY_GAP = 6
-KEYBOARD_ROWS_QWERTY = ["qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./"]
-KEYBOARD_ROWS_DVORAK = ["',.pyfgcrl/=", "aoeuidhtns-", ";qjkxbmwvz"]
+KEYBOARD_ROWS_QWERTY = ["qwertyuiop[]", "asdfghjkl;\'", "zxcvbnm,./"]
+KEYBOARD_ROWS_DVORAK = ["\',.pyfgcrl/=", "aoeuidhtns-", ";qjkxbmwvz"]
 HIGHLIGHT_MS = 150
 THEME_DROPDOWN_MAX_H = 300
 THEME_ITEM_H = 32
 CARET_BLINK_MS = 500
+LERP_SPEED = 0.5  # 0.0 to 1.0, higher is faster
 
 def _font_path(name):
     base = os.path.dirname(os.path.abspath(__file__))
@@ -76,7 +80,7 @@ def main():
     engine.layout = cfg.get("layout", "qwerty")
     
     # Options
-    mode_options = ["time", "word", "quote"]
+    mode_options = ["time", "word", "quote", "practice"]
     theme_names = list(resources.THEMES.keys())
     layout_options = ["qwerty", "dvorak"]
     duration_options = config.DURATION_OPTIONS
@@ -94,7 +98,7 @@ def main():
 
     # UI State
     show_overlay = False
-    show_history = False  # New history window state
+    show_history = False
     overlay_wpm = 0
     overlay_acc = 0
     overlay_missed = ""
@@ -102,8 +106,11 @@ def main():
     theme_dropdown_rects = None
     theme_dropdown_scroll = 0
     key_highlight = None
+    
+    # Smooth Caret
     caret_visible = True
     last_caret_toggle = 0
+    caret_rect_current = None  # (x, y, w, h) float
 
     def save_cfg():
         c = {
@@ -122,31 +129,22 @@ def main():
     def content_rect():
         w, h = screen.get_size()
         x = max(0, (w - CONTENT_W) // 2)
-        # Add some top padding
         return x, 40, CONTENT_W, h - 60
 
     def get_theme():
         return {k: hex_to_rgb(v) for k, v in resources.get_theme().items()}
 
     def layout_rects(cx, cy, cw):
-        """Returns dict of section names -> (x, y, w, h) in content area."""
         y = cy
-        # Increased settings height for cleaner 2-row layout
         settings_h = 110 
         settings_rect = (cx, y, cw, settings_h)
         y += settings_h + 30
-
-        # HUD
         hud_h = 90
         hud_rect = (cx, y, cw, hud_h)
         y += hud_h + 20
-
-        # Typing display
         display_h = 280
         display_rect = (cx, y, cw, display_h)
         y += display_h + 30
-
-        # Keyboard
         keyboard_rect = (cx, y, cw, 240)
         return {
             "settings": settings_rect,
@@ -167,14 +165,9 @@ def main():
 
     # ---- Settings Bar ----
     def draw_settings_bar(surface, theme, cx, cy, cw, ch):
-        # Background for settings area (optional, cleaner without full box)
-        # pygame.draw.rect(surface, theme["bg"], (cx, cy, cw, ch))
-
-        # --- Row 1: Game Mode & Specific Options ---
         y_row1 = cy
         x = cx
         
-        # Mode Label
         lbl = font_ui_bold.render("Mode:", True, theme["main"])
         surface.blit(lbl, (x, y_row1 + 8))
         x += lbl.get_width() + 12
@@ -202,7 +195,7 @@ def main():
         pygame.draw.line(surface, theme["main"], (x, y_row1 + 5), (x, y_row1 + 25), 1)
         x += 20
 
-        # Dynamic Options based on mode
+        # Dynamic Options
         duration_rects = {}
         words_rects = {}
         
@@ -219,12 +212,12 @@ def main():
                 bg_color = theme["caret"] if is_active else theme["bg"]
                 text_color = theme["bg"] if is_active else theme["main"]
                 border = None if is_active else theme["main"]
-
                 draw_button_bg(surface, r, bg_color, border, radius=6)
                 draw_text_centered(surface, label, font_ui_bold, text_color, r.center)
                 x += w + 6
 
-        elif current_mode == "word":
+        elif current_mode in ("word", "practice"):
+            # Practice mode also uses word count for length of test
             for w_count in word_count_options:
                 label = str(w_count)
                 w, h = font_ui.size(label)
@@ -237,29 +230,24 @@ def main():
                 bg_color = theme["caret"] if is_active else theme["bg"]
                 text_color = theme["bg"] if is_active else theme["main"]
                 border = None if is_active else theme["main"]
-
                 draw_button_bg(surface, r, bg_color, border, radius=6)
                 draw_text_centered(surface, label, font_ui_bold, text_color, r.center)
                 x += w + 6
         
         elif current_mode == "quote":
-            # Quote mode usually determines length automatically, but we can show a label
             lbl = font_ui.render("Random Quote", True, theme["main"])
             surface.blit(lbl, (x, y_row1 + 8))
 
-
-        # --- Row 2: Global Settings (Theme, Font, etc) ---
+        # --- Row 2 ---
         y_row2 = cy + 50
         x = cx
 
-        # Theme Dropdown Button
         theme_lbl_w = font_ui.size(current_theme_name)[0] + 40
         theme_btn = pygame.Rect(x, y_row2, max(140, theme_lbl_w), 34)
         draw_button_bg(surface, theme_btn, theme["main"], radius=6)
         draw_text_centered(surface, current_theme_name, font_ui_bold, theme["bg"], theme_btn.center)
         x += theme_btn.width + 16
 
-        # Layout
         layout_rects = {}
         for l_opt in layout_options:
             label = l_opt.upper()
@@ -268,45 +256,36 @@ def main():
             h += 14
             r = pygame.Rect(x, y_row2, w, h)
             layout_rects[l_opt] = r
-            
             is_active = (l_opt == current_layout)
             bg_color = theme["caret"] if is_active else theme["bg"]
             text_color = theme["bg"] if is_active else theme["main"]
             border = None if is_active else theme["main"]
-            
             draw_button_bg(surface, r, bg_color, border, radius=6)
             draw_text_centered(surface, label, font_ui_small, text_color, r.center)
             x += w + 6
-        
         x += 16 
 
-        # Font Size
         font_rects = {}
         for f_opt in ["small", "medium", "large"]:
             label = f_opt[0].upper()
             w, h = 34, 34
             r = pygame.Rect(x, y_row2, w, h)
             font_rects[f_opt] = r
-            
             is_active = (f_opt == current_font_size)
             bg_color = theme["caret"] if is_active else theme["bg"]
             text_color = theme["bg"] if is_active else theme["main"]
             border = None if is_active else theme["main"]
-            
             draw_button_bg(surface, r, bg_color, border, radius=6)
             draw_text_centered(surface, label, font_ui_bold, text_color, r.center)
             x += w + 6
-
         x += 16
 
-        # Toggles (Sound, Reduced Motion)
         sound_rect = pygame.Rect(x, y_row2, 40, 34)
         is_active = sound_on_error
         bg_color = theme["caret"] if is_active else theme["bg"]
         text_color = theme["bg"] if is_active else theme["main"]
         border = None if is_active else theme["main"]
         draw_button_bg(surface, sound_rect, bg_color, border, radius=6)
-        # Simple icon or text for sound
         draw_text_centered(surface, "Snd", font_ui_small, text_color, sound_rect.center)
         x += 46
 
@@ -318,7 +297,6 @@ def main():
         draw_button_bg(surface, reduced_rect, bg_color, border, radius=6)
         draw_text_centered(surface, "Mot", font_ui_small, text_color, reduced_rect.center)
         
-        # --- History Button (Right Aligned) ---
         hist_w = 100
         hist_rect = pygame.Rect(cx + cw - hist_w, y_row2, hist_w, 34)
         draw_button_bg(surface, hist_rect, theme["bg"], theme["caret"], radius=6)
@@ -330,7 +308,6 @@ def main():
             "sound": sound_rect, "reduced": reduced_rect, "history": hist_rect
         }
 
-    # Only used for hit testing logic without drawing, similar to draw_settings_bar logic
     def get_settings_bar_rects(cx, cy, cw, ch):
         y_row1 = cy
         x = cx
@@ -348,7 +325,7 @@ def main():
                 w = font_ui.size(str(d))[0] + 20
                 duration_rects[d] = pygame.Rect(x, y_row1, w, 16 + font_ui.get_height())
                 x += w + 6
-        elif current_mode == "word":
+        elif current_mode in ("word", "practice"):
             for w_count in word_count_options:
                 w = font_ui.size(str(w_count))[0] + 20
                 words_rects[w_count] = pygame.Rect(x, y_row1, w, 16 + font_ui.get_height())
@@ -385,11 +362,8 @@ def main():
 
     # ---- Draw HUD ----
     def draw_hud(surface, theme, cx, cy, cw, ch, time_val, wpm, acc):
-        # Clean hud, just text, no box
         time_surf = font_mono_large.render(str(time_val), True, theme["caret"])
         surface.blit(time_surf, (cx + 20, cy + 10))
-        
-        # Stats aligned right
         stats_text = f"WPM: {wpm}   ACC: {acc}%"
         stats_surf = font_ui.render(stats_text, True, theme["main"])
         surface.blit(stats_surf, (cx + cw - stats_surf.get_width() - 20, cy + 30))
@@ -411,25 +385,25 @@ def main():
             lines.append(line)
         return lines
 
-    # ---- Draw Display ----
-    def draw_display(surface, theme, cx, cy, cw, ch, target_text, user_input, caret_visible=True):
+    # ---- Draw Display (Returns Target Cursor Rect) ----
+    def draw_display(surface, theme, cx, cy, cw, ch, target_text, user_input):
         rect = pygame.Rect(cx, cy, cw, ch)
-        pygame.draw.rect(surface, theme["bg"], rect) # Just fill bg
+        pygame.draw.rect(surface, theme["bg"], rect)
         
         padding = 10
         inner_w = cw - 2 * padding
         inner_x, inner_y = cx + padding, cy + padding
 
         target_lines = wrap_text(target_text, font_mono, inner_w)
-        line_height = font_mono.get_height() + 8 # More breathing room
+        line_height = font_mono.get_height() + 8 
         cursor_idx = len(user_input)
 
         py = inner_y
         idx = 0
-        
-        # Limit rows to fit
         max_rows = ch // line_height
         
+        target_caret_rect = None
+
         for row_idx, tline in enumerate(target_lines):
             if row_idx >= max_rows: break
             
@@ -438,31 +412,31 @@ def main():
             for i, tc in enumerate(tline):
                 color = theme["main"]
                 bg = None
-                is_cursor = caret_visible and (idx + i) == cursor_idx
+                is_cursor_pos = (idx + i) == cursor_idx
+                
                 if i < len(uline):
                     if uline[i] == tc:
                         color = theme["correct"]
                     else:
                         color = theme["error"]
                 
-                if is_cursor:
-                    bg = theme["caret"]
-                    if color == theme["main"]:
-                        color = theme["bg"]
-                
+                if is_cursor_pos:
+                    cw_char = font_mono.size(tc)[0]
+                    target_caret_rect = pygame.Rect(px, py, cw_char, line_height)
+                    pass
+
                 cs = font_mono.render(tc, True, color)
-                if bg is not None:
-                    pygame.draw.rect(surface, bg, (px, py, cs.get_width(), line_height))
                 surface.blit(cs, (px, py))
                 px += cs.get_width()
             
-            # Cursor at end of line
-            if caret_visible and idx + len(tline) == cursor_idx:
+            if (idx + len(tline) == cursor_idx):
                 cw_char = font_mono.size(" ")[0]
-                pygame.draw.rect(surface, theme["caret"], (px, py, cw_char, line_height))
+                target_caret_rect = pygame.Rect(px, py, cw_char, line_height)
                 
             idx += len(tline)
             py += line_height
+            
+        return target_caret_rect
 
     # ---- Keyboard ----
     def build_key_rects(cx, cy, cw, layout_name):
@@ -496,8 +470,6 @@ def main():
             else:
                 bg_col = theme["main"]
                 txt_col = theme["bg"]
-                # Dim the keyboard a bit if not active
-                # But simple is fine
             
             pygame.draw.rect(surface, bg_col, r, border_radius=4)
             label = "SPACE" if ch == " " else ch.upper()
@@ -507,7 +479,6 @@ def main():
 
     # ---- Overlays ----
     def draw_overlay(surface, theme, wpm, acc, missed_str):
-        # Semi-transparent bg
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         surface.blit(overlay, (0, 0))
@@ -520,25 +491,19 @@ def main():
         pygame.draw.rect(surface, theme["bg"], rect, border_radius=12)
         pygame.draw.rect(surface, theme["main"], rect, 2, border_radius=12)
 
-        # Content
         draw_text_centered(surface, "Result", font_ui_bold, theme["caret"], (rect.centerx, oy + 40))
-        
-        # WPM / ACC Big
         y = oy + 100
         wpm_str = f"{wpm} WPM"
         acc_str = f"{acc}% ACC"
-        
         wpm_surf = font_mono_large.render(wpm_str, True, theme["main"])
         acc_surf = font_mono_large.render(acc_str, True, theme["main"])
-        
         surface.blit(wpm_surf, (rect.centerx - wpm_surf.get_width() - 20, y))
         surface.blit(acc_surf, (rect.centerx + 20, y))
 
-        # Missed
         y += 80
         if missed_str:
             lines = missed_str.split("\n")
-            for line in lines[:5]: # Show max 5 lines
+            for line in lines[:5]: 
                 t = font_ui.render(line, True, theme["error"])
                 surface.blit(t, (rect.centerx - t.get_width() // 2, y))
                 y += 24
@@ -546,18 +511,16 @@ def main():
             t = font_ui.render("Perfect!", True, theme["correct"])
             surface.blit(t, (rect.centerx - t.get_width() // 2, y))
 
-        # Hint
         hint = font_ui.render("Press TAB to restart", True, theme["main"])
         surface.blit(hint, (rect.centerx - hint.get_width() // 2, rect.bottom - 40))
 
     def draw_history_overlay(surface, theme):
-        # Semi-transparent bg
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         surface.blit(overlay, (0, 0))
 
         sw, sh = surface.get_size()
-        ow, oh = 800, 700  # Increased height for better spacing
+        ow, oh = 800, 700 
         ox, oy = (sw - ow) // 2, (sh - oh) // 2
         rect = pygame.Rect(ox, oy, ow, oh)
         
@@ -566,7 +529,6 @@ def main():
 
         draw_text_centered(surface, "Typing History", font_ui_bold, theme["caret"], (rect.centerx, oy + 30))
         
-        # --- Table (Top Half) ---
         headers = ["Date", "Mode", "WPM", "Accuracy", "Missed"]
         col_x = [ox + 40, ox + 220, ox + 350, ox + 450, ox + 580]
         header_y = oy + 60
@@ -574,11 +536,9 @@ def main():
         for i, h in enumerate(headers):
             txt = font_ui_bold.render(h, True, theme["main"])
             surface.blit(txt, (col_x[i], header_y))
-        
         pygame.draw.line(surface, theme["main"], (ox + 20, header_y + 25), (ox + ow - 20, header_y + 25), 1)
 
         history = HistoryManager.load_history()
-        # Show last 8 for table to save even more space for graph
         recent_count = 8
         recent = list(reversed(history))[:recent_count]
         
@@ -598,13 +558,10 @@ def main():
                 surface.blit(txt, (col_x[i], row_y))
             row_y += 28
 
-        # --- Graph (Bottom Half) ---
-        # Graph area
         graph_top = row_y + 30
-        graph_h = rect.bottom - graph_top - 80 # Leave 80px for footer
+        graph_h = rect.bottom - graph_top - 80 
         graph_rect = pygame.Rect(ox + 60, graph_top, ow - 120, graph_h)
         
-        # Data for graph (last 50)
         graph_data = history[-50:]
         if len(graph_data) > 1:
             wpm_values = [d.get("wpm", 0) for d in graph_data]
@@ -614,24 +571,19 @@ def main():
                 max_wpm += 10
                 min_wpm = max(0, min_wpm - 10)
             
-            # Calculate Moving Average (Window 10)
             avg_points = []
             window_size = 10
             if len(wpm_values) >= window_size:
                 for i in range(len(wpm_values) - window_size + 1):
                     window = wpm_values[i : i + window_size]
                     avg = sum(window) / window_size
-                    # x position should correspond to the END of the window (the 10th point)
-                    # index in wpm_values for the end is i + window_size - 1
                     avg_points.append((i + window_size - 1, avg))
 
-            # Draw axes labels
             max_lbl = font_ui_small.render(str(max_wpm), True, theme["main"])
             min_lbl = font_ui_small.render(str(min_wpm), True, theme["main"])
             surface.blit(max_lbl, (graph_rect.left - max_lbl.get_width() - 8, graph_rect.top))
             surface.blit(min_lbl, (graph_rect.left - min_lbl.get_width() - 8, graph_rect.bottom - min_lbl.get_height()))
 
-            # Draw raw data lines
             points = []
             count = len(wpm_values)
             for i, wpm in enumerate(wpm_values):
@@ -645,30 +597,20 @@ def main():
                 for p in points:
                     pygame.draw.circle(surface, theme["caret"], (int(p[0]), int(p[1])), 3)
 
-            # Draw Moving Average line
             if len(avg_points) >= 2:
                 ma_screen_points = []
                 for idx, val in avg_points:
                     px = graph_rect.left + (idx / (count - 1)) * graph_rect.width
                     norm = (val - min_wpm) / (max_wpm - min_wpm)
-                    # Clamp norm 0..1 just in case
                     norm = max(0, min(1, norm))
                     py = graph_rect.bottom - norm * graph_rect.height
                     ma_screen_points.append((px, py))
-                
-                # Draw thicker, different color (using main or error/red for contrast if available, 
-                # but theme["main"] is safer for harmony, maybe slightly dimmer or error color for contrast?)
-                # Let's use theme["error"] or a mix. Let's use theme["main"] for subtle, or specific color.
-                # User asked for "a curve", let's make it distinct.
                 pygame.draw.lines(surface, theme["main"], False, ma_screen_points, 3)
 
-            # Legend
             legend_y = graph_rect.bottom + 10
-            # Raw
             pygame.draw.circle(surface, theme["caret"], (rect.centerx - 60, legend_y + 6), 4)
             l1 = font_ui_small.render("Raw WPM", True, theme["main"])
             surface.blit(l1, (rect.centerx - 50, legend_y))
-            # Avg
             pygame.draw.circle(surface, theme["main"], (rect.centerx + 20, legend_y + 6), 4)
             l2 = font_ui_small.render(f"Avg ({window_size})", True, theme["main"])
             surface.blit(l2, (rect.centerx + 30, legend_y))
@@ -680,14 +622,12 @@ def main():
              msg = font_ui.render("No history data", True, theme["main"])
              surface.blit(msg, (graph_rect.centerx - msg.get_width()//2, graph_rect.centery))
 
-        # Close Button
         close_btn_rect = pygame.Rect(0, 0, 100, 34)
         close_btn_rect.center = (rect.centerx, rect.bottom - 30)
         draw_button_bg(surface, close_btn_rect, theme["bg"], theme["main"], radius=6)
         draw_text_centered(surface, "Close", font_ui_bold, theme["main"], close_btn_rect.center)
         
         return close_btn_rect
-
 
     def open_theme_dropdown(theme_btn_rect):
         nonlocal theme_dropdown_rects, theme_dropdown_scroll
@@ -796,15 +736,9 @@ def main():
                     continue
                 pos = event.pos
                 
-                # If history open, clicking anywhere (or specific button) could close it? 
-                # Let's enforce clicking the History button to toggle back or Esc.
                 if show_history:
-                     # Check if clicked close button
                      if history_close_btn_rect and history_close_btn_rect.collidepoint(pos):
                          show_history = False
-                     
-                     # Also allow clicking the main History button to toggle off (if visible/clickable)
-                     # But overlay covers it usually. The internal close button is best.
                      continue
 
                 # Theme dropdown
@@ -834,7 +768,7 @@ def main():
                     continue
 
                 if show_overlay:
-                    continue # Block settings interaction when result overlay is up (except history?)
+                    continue 
                 
                 if settings_rects_cache["theme"].collidepoint(pos):
                     theme_dropdown_rects = open_theme_dropdown(settings_rects_cache["theme"])
@@ -872,7 +806,6 @@ def main():
                     if r.collidepoint(pos):
                         current_font_size = f
                         save_cfg()
-                        # Need to reload fonts
                         font_size_px = config.get_font_size_px(f)
                         resources.FONT_SIZE = font_size_px
                         font_mono = _load_font(roboto_regular, font_size_px) or pygame.font.SysFont("consolas", font_size_px)
@@ -905,7 +838,6 @@ def main():
         # --- Draw ---
         screen.fill(theme["bg"])
         
-        # Always draw UI base
         sx, sy, sw, sh = layouts["settings"]
         settings_rects_cache = draw_settings_bar(screen, theme, sx, sy, sw, sh)
         
@@ -918,7 +850,38 @@ def main():
         draw_hud(screen, theme, hx, hy, hw, hh, time_val, engine.wpm, engine.accuracy)
 
         dx, dy, dw, dh = layouts["display"]
-        draw_display(screen, theme, dx, dy, dw, dh, engine.target_text, engine.user_input, caret_visible=caret_visible)
+        target_caret_rect = draw_display(screen, theme, dx, dy, dw, dh, engine.target_text, engine.user_input)
+
+        # Smooth Caret Animation
+        if target_caret_rect:
+            if caret_rect_current is None:
+                caret_rect_current = list(target_caret_rect)
+            else:
+                cx_cur, cy_cur, cw_cur, ch_cur = caret_rect_current
+                tx, ty, tw, th = target_caret_rect
+                
+                if reduced_motion:
+                    caret_rect_current = list(target_caret_rect)
+                else:
+                    cx_cur = lerp(cx_cur, tx, LERP_SPEED)
+                    cy_cur = lerp(cy_cur, ty, LERP_SPEED)
+                    cw_cur = lerp(cw_cur, tw, LERP_SPEED)
+                    ch_cur = lerp(ch_cur, th, LERP_SPEED)
+                    
+                    if abs(cx_cur - tx) < 0.5 and abs(cy_cur - ty) < 0.5:
+                         caret_rect_current = list(target_caret_rect)
+                    else:
+                         caret_rect_current = [cx_cur, cy_cur, cw_cur, ch_cur]
+
+            if caret_visible and not show_overlay and not show_history:
+                 s = pygame.Surface((caret_rect_current[2], caret_rect_current[3]), pygame.SRCALPHA)
+                 r, g, b = theme["caret"]
+                 s.fill((r, g, b, 128)) 
+                 screen.blit(s, (caret_rect_current[0], caret_rect_current[1]))
+                 
+        else:
+            pass
+
 
         kx, ky, kw, kh = layouts["keyboard"]
         highlight_char = None
@@ -932,7 +895,6 @@ def main():
                 key_highlight = None
         draw_keyboard(screen, theme, kx, ky, kw, kh, current_layout, highlight_char, highlight_correct)
 
-        # Dropdown on top of main UI, but below overlays
         if theme_dropdown_rects and not show_history and not show_overlay:
             tx, ty = theme_dropdown_rects[0][0].x, theme_dropdown_rects[0][0].y
             drop_h = min(THEME_DROPDOWN_MAX_H, len(theme_names) * THEME_ITEM_H)
@@ -943,9 +905,7 @@ def main():
                 if draw_r.bottom <= ty or draw_r.top >= ty + drop_h:
                     continue
                 pygame.draw.rect(screen, theme["main"], draw_r, border_radius=0)
-                # Separator
                 pygame.draw.line(screen, theme["bg"], draw_r.bottomleft, draw_r.bottomright)
-                
                 t = font_ui.render(name[:20], True, theme["bg"])
                 screen.blit(t, (draw_r.x + 8, draw_r.centery - t.get_height() // 2))
             screen.set_clip(None)

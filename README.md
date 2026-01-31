@@ -4,13 +4,21 @@ A minimalist typing test application built with Python and Pygame, inspired by M
 
 ## Features
 - **Clean Interface**: Dark mode with distraction-free typing area.
-- **Real-time Feedback**: Instant character validation (correct/incorrect), blinking caret.
+- **Real-time Feedback**: Instant character validation (correct/incorrect).
+- **Smooth Caret**: Modern, smooth sliding cursor animation for a fluid typing experience.
 - **Live Metrics**: Words Per Minute (WPM) and Accuracy tracking.
-- **Game Modes**: **Time** (15/30/60/120 s), **Word** (10/25/50/100 words), **Quote**.
+- **Game Modes**: 
+    - **Time**: 15/30/60/120 s
+    - **Word**: 10/25/50/100 words
+    - **Quote**: Practice typing famous quotes.
+    - **Practice**: Automatically generates tests based on your frequently missed characters.
+- **History & Progress**: 
+    - View your last 50 attempts in a dedicated history window.
+    - **Graphical Analysis**: Visual curve of your WPM over time with a moving average trend line.
 - **Themes**: Monkeytype, GitHub, Nord, Dracula, Solarized, Gruvbox, One Dark, Catppuccin, Rose Pine, Tokyo Night, Everforest, **High contrast**, and more.
 - **Layout**: QWERTY or Dvorak (keyboard visualizer).
-- **Settings**: Font size (small/medium/large), optional sound on error, reduced motion (no caret blink).
-- **Persistent Config**: Theme, layout, mode, duration, word count, font size, and options are saved and restored on next run.
+- **Settings**: Font size (small/medium/large), optional sound on error, reduced motion (disables smooth caret).
+- **Persistent Config**: Theme, layout, mode, duration, word count, font size, and options are saved automatically.
 - **Quick Restart**: Press `Tab` at any time to reset.
 
 ## Requirements
@@ -31,7 +39,8 @@ python main.py
 
 ## Config & Data
 - **Config**: `typing_config.json` (next to the script). Stores theme, layout, mode, duration, word count, font size, sound on error, reduced motion.
-- **History**: `typing_history.json` (next to the script). Last 50 attempts (WPM, accuracy, mode). Used for “previous attempt” on the results screen.
+- **History**: `typing_history.json` (next to the script). Stores your typing session results.
+- **Stats**: `typing_stats.json` (next to the script). Tracks your missed characters to power the "Practice" mode.
 
 ## Tests
 From the project root:
@@ -42,10 +51,9 @@ python -m unittest tests.test_logic -v
 ```
 
 ## Project Structure
-- `main.py` – Entry point (Pygame)
-- `logic.py` – TypingEngine, HistoryManager
+- `main.py` – Entry point (Pygame GUI)
+- `logic.py` – Game logic, stats, and history management
 - `resources.py` – Themes, word/quote lists, font size options
-- `config.py` – Load/save settings (typing_config.json)
-- `sound_util.py` – Optional error beep (generates `assets/error_beep.wav` if missing)
+- `config.py` – Load/save settings
+- `sound_util.py` – Optional error beep
 - `fonts/` – Optional Roboto fonts
-- `tests/test_logic.py` – Unit tests for engine and history
