@@ -19,7 +19,7 @@ DEFAULTS = {
 # Allowed values for validation
 DURATION_OPTIONS = [15, 30, 60, 120]
 WORD_COUNT_OPTIONS = [10, 25, 50, 100]
-FONT_SIZE_MAP = {"small": 18, "medium": 24, "large": 30}
+FONT_SIZE_MAP = {"small": 20, "medium": 28, "large": 36}
 
 
 def load_config():

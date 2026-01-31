@@ -1,10 +1,10 @@
 {
-  "theme": "monkeytype",
+  "theme": "github_dark",
   "layout": "dvorak",
-  "mode": "time",
+  "mode": "word",
   "duration": 15,
   "word_count": 10,
-  "font_size": "small",
+  "font_size": "large",
   "sound_on_error": true,
   "reduced_motion": true
 }
